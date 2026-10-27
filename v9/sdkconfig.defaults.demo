@@ -1,6 +1,6 @@
-# lv_demo_benchmark oficial; o resumo sai via LV_LOG -> printf
+# official lv_demo_benchmark; the summary goes out via LV_LOG -> printf
 CONFIG_LV_USE_DEMO_BENCHMARK=y
 CONFIG_LV_USE_LOG=y
 CONFIG_LV_LOG_PRINTF=y
-# atualização sem limite de 33 ms, como o set_max_speed do v8
+# refresh without the 33 ms limit, like v8's set_max_speed
 CONFIG_LV_DEF_REFR_PERIOD=1

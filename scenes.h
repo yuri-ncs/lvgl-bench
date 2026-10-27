@@ -1,4 +1,4 @@
-/* Cenas do benchmark. As mesmas chamadas compilam no LVGL 8 e no 9; os nomes usados são os do v9. */
+/* Benchmark scenes. The same calls build on LVGL 8 and 9; the names used are the v9 ones. */
 #pragma once
 #include "lvgl.h"
 
@@ -23,8 +23,8 @@ typedef struct {
 extern const scene_t scenes[];
 extern const int scene_count;
 
-/* Limpa a tela ativa e monta a cena. */
+/* Clears the active screen and builds the scene. */
 void scene_load(const scene_t *scene);
 
-/* Mudança por quadro; só "rotate", "grad_rot" e "ui" animam. */
+/* Per-frame change; only "rotate", "grad_rot" and "ui" animate. */
 void scene_step(int frame);

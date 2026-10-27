@@ -1,8 +1,8 @@
-# troca de bytes feita no hardware i80, como no v9
+# byte swap done in the i80 hardware, as in v9
 CONFIG_LV_COLOR_16_SWAP=n
-# malloc/memcpy da libc, como no v9
+# libc malloc/memcpy, as in v9
 CONFIG_LV_MEM_CUSTOM=y
 CONFIG_LV_MEMCPY_MEMSET_STD=y
-# v8 com cor de 16 bits precisa disso para transform_* em objetos que não são imagem;
-# sem isso ele pula o objeto em silêncio (o v9 não precisa)
+# v8 with 16-bit color needs this for transform_* on non-image objects;
+# without it it silently skips the object (v9 does not need it)
 CONFIG_LV_COLOR_SCREEN_TRANSP=y

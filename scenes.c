@@ -1,5 +1,5 @@
-/* Objetos sem estilo de tema (lv_obj_remove_style_all): os temas padrão do v8 e do v9 são diferentes,
- * e assim as duas versões desenham exatamente a mesma coisa. */
+/* Objects without theme style (lv_obj_remove_style_all): the default themes of v8 and v9 differ,
+ * so both versions draw exactly the same thing. */
 #include "scenes.h"
 
 #define IMAGE_SIZE 64
@@ -18,9 +18,9 @@ static lv_image_dsc_t texture = {
 };
 #endif
 
-static void (*step_callback)(int frame); // definido pelas cenas animadas
+static void (*step_callback)(int frame); // set by the animated scenes
 
-/* Textura RGB565 procedural: degradê em R e G, padrão XOR em B (parece ruído de propósito). */
+/* Procedural RGB565 texture: gradient in R and G, XOR pattern in B (deliberately looks like noise). */
 static void make_texture(void)
 {
     for (int y = 0; y < IMAGE_SIZE; y++)
@@ -138,13 +138,13 @@ static void create_arc(lv_obj_t *screen)
     }
 }
 
-/* Círculos com degradê girando: com rotação, cada objeto é desenhado numa camada intermediária (ARGB)
- * que depois é transformada; das operações mais caras do LVGL. */
+/* Rotating gradient circles: with rotation, each object is drawn into an intermediate (ARGB) layer
+ * that is then transformed; one of the most expensive LVGL operations. */
 static lv_obj_t *gradient_circles[8];
 
 static void grad_rot_step(int frame)
 {
-    for (int i = 0; i < 8; i++) // +1: com ângulo 0 o LVGL pula a camada e o quadro sai barato
+    for (int i = 0; i < 8; i++) // +1: at angle 0 LVGL skips the layer and the frame comes out cheap
         lv_obj_set_style_transform_rotation(gradient_circles[i], (i * 450 + frame * (25 + i * 10)) % 3599 + 1, 0);
 }
 
@@ -163,8 +163,8 @@ static void create_grad_rot(lv_obj_t *screen)
     step_callback = grad_rot_step;
 }
 
-/* Interface "de verdade": widgets com o tema padrão de cada versão, como num app migrado do v8 para o v9.
- * Diferente das outras cenas, aqui o v8 e o v9 desenham com estilos um pouco diferentes (temas diferentes). */
+/* "Real" interface: widgets with each version's default theme, as in an app migrated from v8 to v9.
+ * Unlike the other scenes, here v8 and v9 draw with slightly different styles (different themes). */
 static lv_obj_t *ui_chart, *ui_arc, *ui_arc_label, *ui_bar, *ui_slider, *ui_list;
 static lv_chart_series_t *ui_series;
 

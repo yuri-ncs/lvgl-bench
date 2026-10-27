@@ -1,2 +1,2 @@
-# LVGL com OS: o desenho roda em threads próprias (base para o .mt)
+# LVGL with OS: drawing runs in its own threads (base for .mt)
 CONFIG_LV_OS_FREERTOS=y

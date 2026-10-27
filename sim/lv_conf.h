@@ -1,8 +1,8 @@
-/* Só o que difere do padrão do LVGL 9; o resto vem de lv_conf_internal.h. */
+/* Only what differs from the LVGL 9 default; the rest comes from lv_conf_internal.h. */
 #ifndef LV_CONF_H
 #define LV_CONF_H
 
-#define LV_COLOR_DEPTH 16 /* igual ao ST7789 da placa */
+#define LV_COLOR_DEPTH 16 /* same as the board's ST7789 */
 #define LV_MEM_SIZE    (256 * 1024)
 
 #define LV_USE_SDL 1

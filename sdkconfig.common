@@ -3,19 +3,19 @@ CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
-# caches no máximo: o LVGL roda da flash, e o v9 tem mais código
+# caches at maximum: LVGL runs from flash, and v9 has more code
 CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
 CONFIG_ESP32S3_DATA_CACHE_64KB=y
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
-# o laço de medida não cede a CPU
+# the measurement loop does not yield the CPU
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
-# símbolos LVGL com o mesmo nome no 8 e no 9
+# LVGL symbols with the same name in 8 and 9
 CONFIG_LV_COLOR_DEPTH_16=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
 CONFIG_LV_ATTRIBUTE_FAST_MEM_USE_IRAM=y
-# printf sai pela USB-C (USB-Serial-JTAG nativa do S3; a placa não tem conversor UART)
+# printf goes out over USB-C (native USB-Serial-JTAG of the S3; the board has no UART converter)
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
-# 3,5 KB do padrão estoura na cena "ui" com o LVGL em FreeRTOS
+# the default 3.5 KB overflows in the "ui" scene with LVGL on FreeRTOS
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384

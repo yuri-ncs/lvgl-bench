@@ -1,6 +1,6 @@
-/* Referência visual no PC (LVGL 9 + SDL2), na resolução da placa ampliada 3x.
- *   lvgl_bench_sim          alterna as cenas do benchmark a cada 2 s (nome na barra de título)
- *   lvgl_bench_sim --demo   roda o lv_demo_benchmark oficial */
+/* Visual reference on the PC (LVGL 9 + SDL2), at the board resolution scaled 3x.
+ *   lvgl_bench_sim          cycles through the benchmark scenes every 2 s (name in the title bar)
+ *   lvgl_bench_sim --demo   runs the official lv_demo_benchmark */
 #include <string.h>
 #include "scenes.h"
 #include "lv_demos.h"

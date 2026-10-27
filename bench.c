@@ -1,5 +1,5 @@
-/* Benchmark de renderização LVGL 8.4 x 9.x no LilyGO T-Display-S3 (ST7789 320x170, i80 8 bits).
- * O mesmo arquivo compila nas duas versões; as diferenças de API ficam nos #if e em scenes.h. */
+/* LVGL 8.4 vs 9.x rendering benchmark on the LilyGO T-Display-S3 (ST7789 320x170, 8-bit i80).
+ * The same file builds on both versions; API differences live in the #if blocks and in scenes.h. */
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -17,14 +17,14 @@
 
 #define H_RES     320
 #define V_RES     170
-#define BUF_LINES 40      // buffer parcial, dois buffers, igual nas duas versões
-#define FRAMES    60      // quadros medidos por cena
+#define BUF_LINES 40      // partial buffer, two buffers, same on both versions
+#define FRAMES    60      // frames measured per scene
 #ifndef PCLK_HZ
-#define PCLK_HZ 6528000 // clock do LCD do exemplo da LilyGO; o S3 só gera 80 MHz / n, então vira 6,67 MHz. Mude com "bench.py run v9@20"
+#define PCLK_HZ 6528000 // LCD clock from the LilyGO example; the S3 only generates 80 MHz / n, so it becomes 6.67 MHz. Change with "bench.py run v9@20"
 #endif
-#define PIN_LCD_POWER 15      // alimentação do LCD (necessária na bateria)
-#define PIN_LCD_RD    9       // RD inativo
-#define PIN_BACKLIGHT 38      // luz de fundo
+#define PIN_LCD_POWER 15      // LCD power (required on battery)
+#define PIN_LCD_RD    9       // RD inactive
+#define PIN_BACKLIGHT 38      // backlight
 #define PIN_LCD_DC    7
 #define PIN_LCD_WR    8
 #define PIN_LCD_CS    6
@@ -33,9 +33,9 @@
 
 static esp_lcd_panel_handle_t panel;
 static lv_display_t *lvgl_display;
-static bool null_flush;            // true: descarta os pixels, mede só a CPU renderizando
-static volatile uint32_t dma_sent; // só a task escreve (flush_cb)
-static volatile uint32_t dma_done; // só a ISR do DMA escreve (on_trans_done)
+static bool null_flush;            // true: discards the pixels, measures only the CPU rendering
+static volatile uint32_t dma_sent; // only the task writes (flush_cb)
+static volatile uint32_t dma_done; // only the DMA ISR writes (on_trans_done)
 static int flush_count;
 
 #if LVGL_VERSION_MAJOR < 9
@@ -63,8 +63,8 @@ static bool on_trans_done(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_e
     return false;
 }
 
-/* Sequência da LilyGO para o lote novo de telas (LCD_MODULE_CMD_1 nos exemplos deles);
- * sem ela aparece lixo em partes da tela. */
+/* LilyGO sequence for the new batch of screens (LCD_MODULE_CMD_1 in their examples);
+ * without it garbage shows up on parts of the screen. */
 static const struct {
     uint8_t command, length, data[14];
 } lilygo_init[] = {
@@ -106,7 +106,7 @@ static void lcd_init(void)
         .on_color_trans_done = on_trans_done,
         .lcd_cmd_bits = 8, .lcd_param_bits = 8,
         .dc_levels = { .dc_data_level = 1 },
-        .flags.swap_color_bytes = 1, // ST7789 quer RGB565 big-endian; o LCD_CAM troca em hardware, custo zero nas duas versões
+        .flags.swap_color_bytes = 1, // ST7789 wants big-endian RGB565; the LCD_CAM swaps in hardware, zero cost on both versions
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_i80(bus, &panel_io_config, &panel_io));
 
@@ -156,13 +156,13 @@ static void tick_cb(void *arg)
 
 static int row_count;
 
-/* Redesenha a tela inteira FRAMES vezes e manda o tempo de cada quadro (us) pela USB depois da medida. */
+/* Redraws the whole screen FRAMES times and sends each frame's time (us) over USB after the measurement. */
 static void run(const scene_t *scene, bool to_lcd)
 {
     static int32_t frame_us[FRAMES];
     scene_load(scene);
     null_flush = !to_lcd;
-    lv_refr_now(lvgl_display); // primeiro quadro fora da medida (layout, caches)
+    lv_refr_now(lvgl_display); // first frame outside the measurement (layout, caches)
     while (dma_done != dma_sent) {}
 
     flush_count = 0;
@@ -174,7 +174,7 @@ static void run(const scene_t *scene, bool to_lcd)
         while (dma_done != dma_sent) {}
         frame_us[frame] = esp_timer_get_time() - start_us;
     }
-    // sem isso um invalidate que não gera desenho daria um tempo absurdo de baixo
+    // without this, an invalidate that produces no drawing would give an absurdly low time
     ESP_ERROR_CHECK(flush_count >= FRAMES ? ESP_OK : ESP_FAIL);
     for (int frame = 0; frame < FRAMES; frame++)
         printf("F,%s,%s,%d,%ld\n", scene->name, to_lcd ? "lcd" : "render", frame, (long)frame_us[frame]);
@@ -187,8 +187,8 @@ void app_main(void)
     lvgl_init();
 
 #if LV_USE_DEMO_BENCHMARK
-    // compilação "demo": roda o lv_demo_benchmark oficial, que imprime o próprio resumo pela USB ao terminar.
-    // Ele mede com o tick do LVGL, que precisa andar durante o desenho: esp_timer de 1 ms, igual nas duas versões.
+    // "demo" build: runs the official lv_demo_benchmark, which prints its own summary over USB when done.
+    // It measures with the LVGL tick, which must advance while drawing: 1 ms esp_timer, same on both versions.
     esp_timer_handle_t tick_timer;
     const esp_timer_create_args_t tick_args = { .callback = tick_cb, .name = "lv_tick" };
     ESP_ERROR_CHECK(esp_timer_create(&tick_args, &tick_timer));
@@ -206,7 +206,7 @@ void app_main(void)
 #else
     int draw_units = 1;
 #endif
-    // repete para sempre: o bench.py no PC pega o próximo ciclo completo, sem precisar resetar a placa
+    // repeats forever: bench.py on the PC picks up the next complete cycle, no board reset needed
     while (1) {
         printf("B,%d.%d.%d,%d\n", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, draw_units);
         row_count = 0;

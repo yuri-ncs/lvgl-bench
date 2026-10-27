@@ -1,6 +1,6 @@
-"""Gera os gráficos do README a partir de results/*.csv, sem dependências: python docs/charts.py
+"""Generates the README charts from results/*.csv, no dependencies: python docs/charts.py
 
-Também imprime as tabelas em Markdown usadas no README."""
+Also prints the Markdown tables used in the README."""
 import csv
 import math
 import statistics
@@ -12,7 +12,7 @@ CLOCKS = [("", 6.67), ("@10", 10), ("@16", 16), ("@20", 20), ("@26.67", 26.67), 
 SCENES = ["fill", "gradient", "rects", "rects_opa", "shadow", "text", "image", "image_opa", "rotate", "arc",
           "grad_rot", "ui"]
 
-# Paleta validada (dataviz): série 1 = v8, série 2 = v9; o tema escuro troca junto com o do GitHub.
+# Validated palette (dataviz): series 1 = v8, series 2 = v9; the dark theme follows GitHub's.
 STYLE = """<style>
 svg{--bg:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s1:#2a78d6;--s2:#eb6834}
 @media (prefers-color-scheme:dark){svg{--bg:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926}}
@@ -22,10 +22,6 @@ text{font:12px system-ui,-apple-system,'Segoe UI',sans-serif;fill:var(--ink2);fo
 .l1,.l2{fill:none;stroke-width:2}.l1{stroke:var(--s1)}.l2{stroke:var(--s2)}.d1,.d2{stroke:var(--bg);stroke-width:2}
 .d1{fill:var(--s1)}.d2{fill:var(--s2)}
 </style>"""
-
-
-def num(value, fmt=".2f"):  # número com vírgula decimal, como no README
-    return format(value, fmt).replace(".", ",")
 
 
 def load(name):
@@ -45,7 +41,7 @@ def svg(w, h, body):
 
 
 def bar(x, y, w, h, cls, tip):
-    r = min(4, w / 2, h / 2)  # ponta arredondada, base reta
+    r = min(4, w / 2, h / 2)  # rounded tip, flat base
     d = f"M{x:.1f},{y:.1f}h{w - r:.1f}a{r:.1f},{r:.1f} 0 0 1 {r:.1f},{r:.1f}v{h - 2 * r:.1f}" \
         f"a{r:.1f},{r:.1f} 0 0 1 -{r:.1f},{r:.1f}h-{w - r:.1f}z"
     return f'<path class="{cls}" d="{d}"><title>{tip}</title></path>'
@@ -66,8 +62,8 @@ def render_chart(v8, v9):
     vmax = nice(max(max(v8[(s, "render")], v9[(s, "render")]) for s in SCENES), 10)
     x = lambda v: L + v / vmax * pw
     h = top + row * len(SCENES) + 34
-    b = [f'<text class="t" x="20" y="28">Tempo de renderização por quadro (ms, menor é melhor)</text>',
-         f'<text class="m" x="20" y="47">ESP32-S3 a 240 MHz · tela cheia 320×170 · só CPU (pixels descartados) · média de 60 quadros</text>',
+    b = [f'<text class="t" x="20" y="28">Render time per frame (ms, lower is better)</text>',
+         f'<text class="m" x="20" y="47">ESP32-S3 at 240 MHz · full screen 320×170 · CPU only (pixels discarded) · average of 60 frames</text>',
          legend(20, 70)]
     for t in range(0, vmax + 1, 10):
         b.append(f'<line class="{"a" if t == 0 else "g"}" x1="{x(t):.1f}" x2="{x(t):.1f}" y1="{top - 6}" y2="{h - 28}"/>')
@@ -76,20 +72,20 @@ def render_chart(v8, v9):
         y = top + i * row
         a, c = v8[(s, "render")], v9[(s, "render")]
         b.append(f'<text x="{L - 10}" y="{y + 16}" text-anchor="end">{s}</text>')
-        b.append(bar(L, y + 2, x(a) - L, 10, "s1", f"{s} · v8: {num(a)} ms"))
-        b.append(bar(L, y + 14, x(c) - L, 10, "s2", f"{s} · v9: {num(c)} ms"))
+        b.append(bar(L, y + 2, x(a) - L, 10, "s1", f"{s} · v8: {a:.2f} ms"))
+        b.append(bar(L, y + 14, x(c) - L, 10, "s2", f"{s} · v9: {c:.2f} ms"))
         d = 100 * (c / a - 1)
         b.append(f'<text x="{x(max(a, c)) + 6:.1f}" y="{y + 16}">{d:+.0f}%</text>'.replace("-", "−"))
     return svg(W, h, b)
 
 
 def fps_chart(series):
-    picks = [("fill", "fill · leve, limitada pelo barramento"), ("text", "text · texto suavizado"),
-             ("ui", "ui · interface com widgets"), ("grad_rot", "grad_rot · camadas giradas")]
+    picks = [("fill", "fill · light, bus-limited"), ("text", "text · anti-aliased text"),
+             ("ui", "ui · widget interface"), ("grad_rot", "grad_rot · rotated layers")]
     W, PW, PH, top = 780, 370, 210, 84
     xs = lambda mhz, ox: ox + 44 + (mhz - 5) / 35 * (PW - 84)
-    b = [f'<text class="t" x="20" y="28">Quadros por segundo com envio ao LCD × clock do barramento (PCLK)</text>',
-         f'<text class="m" x="20" y="47">Mesma CPU (240 MHz); só o clock do barramento i80 de 8 bits muda · eixo X em MHz</text>',
+    b = [f'<text class="t" x="20" y="28">Frames per second with LCD transfer × bus clock (PCLK)</text>',
+         f'<text class="m" x="20" y="47">Same CPU (240 MHz); only the 8-bit i80 bus clock changes · X axis in MHz</text>',
          legend(20, 70)]
     for k, (scene, title) in enumerate(picks):
         ox, oy = 20 + (k % 2) * (PW + 10), top + (k // 2) * (PH + 16)
@@ -107,33 +103,33 @@ def fps_chart(series):
             p = pts[v]
             b.append(f'<polyline class="l{cls}" points="{" ".join(f"{xs(m, ox):.1f},{ys(f):.1f}" for m, f in p)}"/>')
             for m, f in p:
-                b.append(f'<circle class="d{cls}" cx="{xs(m, ox):.1f}" cy="{ys(f):.1f}" r="4"><title>{scene} · v{v} · {num(m, "g")} MHz: {f:.0f} FPS</title></circle>')
+                b.append(f'<circle class="d{cls}" cx="{xs(m, ox):.1f}" cy="{ys(f):.1f}" r="4"><title>{scene} · v{v} · {m} MHz: {f:.0f} FPS</title></circle>')
             ends[v] = (xs(p[-1][0], ox) + 8, ys(p[-1][1]), p[-1][1])
         if abs(ends[8][1] - ends[9][1]) >= 14:
             for v in (8, 9):
                 b.append(f'<text x="{ends[v][0]:.1f}" y="{ends[v][1] + 4:.1f}">v{v} {ends[v][2]:.0f}</text>')
-        else:  # linhas juntas: um rótulo só, sem empilhar
+        else:  # lines close together: a single label, no stacking
             b.append(f'<text x="{ends[8][0]:.1f}" y="{ends[8][1] + 4:.1f}">{ends[8][2]:.0f}</text>')
     return svg(W, top + 2 * (PH + 16), b)
 
 
 def md_tables(series, v8, v9):
-    print("| cena | v8 (ms) | v9 (ms) | v9 vs v8 |\n|---|---:|---:|---:|")
+    print("| scene | v8 (ms) | v9 (ms) | v9 vs v8 |\n|---|---:|---:|---:|")
     for s in SCENES:
         a, c = v8[(s, "render")], v9[(s, "render")]
-        print(f"| `{s}` | {num(a)} | {num(c)} | {100 * (c / a - 1):+.0f}% |")
+        print(f"| `{s}` | {a:.2f} | {c:.2f} | {100 * (c / a - 1):+.0f}% |")
     for v in (8, 9):
-        print(f"\nFPS com envio ao LCD, LVGL {v}:\n\n| cena | " + " | ".join(f"{num(m, 'g')} MHz" for _, m in CLOCKS) + " |")
+        print(f"\nFPS with LCD transfer, LVGL {v}:\n\n| scene | " + " | ".join(f"{m} MHz" for _, m in CLOCKS) + " |")
         print("|---|" + "---:|" * len(CLOCKS))
         for s in SCENES:
             print(f"| `{s}` | " + " | ".join(f"{1000 / d[(s, 'lcd')]:.0f}" if (d := series[v].get(sfx)) else "–"
                                          for sfx, _ in CLOCKS) + " |")
     mt = {n: load(n) for n in ("v9", "v9-freertos", "v9-mt")}
     if all(mt.values()):
-        print("\n| cena | v9 (ms) | v9 + FreeRTOS | v9 + 2 núcleos |\n|---|---:|---:|---:|")
+        print("\n| scene | v9 (ms) | v9 + FreeRTOS | v9 + 2 cores |\n|---|---:|---:|---:|")
         for s in SCENES:
             a = mt["v9"][(s, "render")]
-            print(f"| `{s}` | {num(a)} | " + " | ".join(f"{num(mt[n][(s, 'render')])} ({100 * (mt[n][(s, 'render')] / a - 1):+.0f}%)"
+            print(f"| `{s}` | {a:.2f} | " + " | ".join(f"{mt[n][(s, 'render')]:.2f} ({100 * (mt[n][(s, 'render')] / a - 1):+.0f}%)"
                                                for n in ("v9-freertos", "v9-mt")) + " |")
 
 

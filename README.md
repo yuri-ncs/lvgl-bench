@@ -1,141 +1,140 @@
-# LVGL 8.4 × 9.6 no ESP32-S3 (LilyGO T-Display-S3)
+# LVGL 8.4 × 9.6 on the ESP32-S3 (LilyGO T-Display-S3)
 
-O LVGL 9 trouxe um pipeline de desenho novo e várias otimizações. Este projeto mede **o quanto isso
-muda na prática** num ESP32-S3 de verdade: o mesmo código de interface roda nas duas versões, na
-mesma placa, com as mesmas configurações, e o tempo de cada quadro vai para o PC pela USB.
+LVGL 9 brought a new drawing pipeline and several optimizations. This project measures **how much
+that changes in practice** on a real ESP32-S3: the same UI code runs on both versions, on the same
+board, with the same settings, and the time of each frame is sent to the PC over USB.
 
-![As 12 cenas do benchmark](docs/cenas.png)
+![The 12 benchmark scenes](docs/scenes.png)
 
-*Da esquerda para a direita, de cima para baixo: `fill`, `gradient`, `rects`, `rects_opa`, `shadow`,
-`text`, `image`, `image_opa`, `rotate`, `arc`, `grad_rot`, `ui`.*
+*Left to right, top to bottom: `fill`, `gradient`, `rects`, `rects_opa`, `shadow`, `text`, `image`,
+`image_opa`, `rotate`, `arc`, `grad_rot`, `ui`.*
 
-## Resumo
+## Summary
 
-- **O v9 é bem mais rápido onde o trabalho é misturar pixels:** texto suavizado (−54%), imagem
-  girada (−41%), retângulos translúcidos (−32%) e imagem translúcida (−25%).
-- **O v9 é mais lento onde há muitas operações pequenas:** preencher e copiar sem transparência
-  (+44% e +64%, mas abaixo de 5 ms), o gráfico da interface `ui` (+36%) e os objetos girados de
-  `grad_rot` (+40%). No v9 cada primitiva de desenho (cada segmento de linha, cada ponto do gráfico)
-  tem um custo fixo maior.
-- **Para uma interface típica com widgets (`ui`), o v8 ainda ganha:** 43 contra 32 FPS com a tela a 40 MHz.
-  Para telas cheias de texto, o v9 dobra: 60 contra 29 FPS.
-- **Renderizar nos dois núcleos (`LV_DRAW_SW_DRAW_UNIT_CNT=2`) deixou o v9 mais lento em todas as
-  cenas** (+13% a +92%). Só ligar o FreeRTOS no LVGL já custa até 29%.
-- **Clock do barramento do LCD:** com o valor do exemplo da LilyGO (6,67 MHz) toda cena leve fica
-  presa em 60 FPS. A 40 MHz as cenas leves passam de 300 FPS; as pesadas não mudam, porque aí quem
-  limita é a CPU.
+- **v9 is much faster where the work is blending pixels:** anti-aliased text (−54%), rotated image
+  (−41%), translucent rectangles (−32%) and translucent image (−25%).
+- **v9 is slower where there are many small operations:** opaque fill and copy (+44% and +64%, but
+  under 5 ms), the `ui` chart (+36%) and the rotated objects in `grad_rot` (+40%). In v9 each drawing
+  primitive (each line segment, each chart point) has a larger fixed cost.
+- **For a typical widget UI (`ui`), v8 still wins:** 43 vs 32 FPS with the display at 40 MHz.
+  For text-heavy screens, v9 doubles it: 60 vs 29 FPS.
+- **Rendering on both cores (`LV_DRAW_SW_DRAW_UNIT_CNT=2`) made v9 slower in every scene** (+13% to
+  +92%). Just enabling FreeRTOS in LVGL already costs up to 29%.
+- **LCD bus clock:** with the LilyGO example value (6.67 MHz) every light scene is stuck at 60 FPS.
+  At 40 MHz the light scenes go past 300 FPS; the heavy ones do not change, because there the CPU is
+  the limit.
 
-## Hardware e método
+## Hardware and method
 
 | | |
 |---|---|
-| Placa | LilyGO T-Display-S3: ESP32-S3 (2 núcleos a 240 MHz), ST7789 320×170 em barramento i80 de 8 bits |
-| SDK | ESP-IDF 5.5.4, LVGL 8.4.0 e 9.6.0 pelo registro de componentes |
-| Cor | RGB565, dois buffers parciais de 40 linhas em RAM interna com DMA |
+| Board | LilyGO T-Display-S3: ESP32-S3 (2 cores at 240 MHz), ST7789 320×170 on an 8-bit i80 bus |
+| SDK | ESP-IDF 5.5.4, LVGL 8.4.0 and 9.6.0 from the component registry |
+| Color | RGB565, two 40-line partial buffers in internal RAM with DMA |
 
-Cada cena redesenha **a tela inteira 60 vezes** (`lv_obj_invalidate` + `lv_refr_now`) e o tempo de
-cada quadro é medido com `esp_timer`. Cada cena roda em dois modos:
+Each scene redraws **the whole screen 60 times** (`lv_obj_invalidate` + `lv_refr_now`) and the time
+of each frame is measured with `esp_timer`. Each scene runs in two modes:
 
-- **render**: o `flush_cb` descarta os pixels. Mede só a CPU desenhando, que é o que muda entre as versões.
-- **lcd**: os pixels vão por DMA até a tela. Inclui o barramento, que depende do clock (PCLK).
+- **render**: the `flush_cb` discards the pixels. It measures only the CPU drawing, which is what changes between versions.
+- **lcd**: the pixels go through DMA to the display. It includes the bus, which depends on the clock (PCLK).
 
-Para a comparação ser justa, as duas versões usam:
+To keep the comparison fair, both versions use:
 
-- os mesmos buffers, `malloc`/`memcpy` da libc, `-O2`, caches de instrução e dados no máximo e as
-  funções críticas do LVGL em IRAM (`LV_ATTRIBUTE_FAST_MEM_USE_IRAM`);
-- troca de bytes do RGB565 feita pelo hardware do LCD (`swap_color_bytes`), sem custo de CPU em nenhuma delas;
-- cenas sintéticas sem estilo de tema (`lv_obj_remove_style_all`): os temas padrão do v8 e do v9 são
-  diferentes, e assim as duas desenham exatamente a mesma coisa. A exceção é `ui`, que usa o tema
-  padrão de propósito, como um app migrado do v8 para o v9.
+- the same buffers, libc `malloc`/`memcpy`, `-O2`, instruction and data caches at maximum and the
+  critical LVGL functions in IRAM (`LV_ATTRIBUTE_FAST_MEM_USE_IRAM`);
+- RGB565 byte swapping done by the LCD hardware (`swap_color_bytes`), with no CPU cost in either of them;
+- synthetic scenes with no theme style (`lv_obj_remove_style_all`): the default themes of v8 and v9
+  are different, and this way both draw exactly the same thing. The exception is `ui`, which uses the
+  default theme on purpose, like an app migrated from v8 to v9.
 
-A única diferença de configuração obrigatória: o v8 com cor de 16 bits precisa de
-`LV_COLOR_SCREEN_TRANSP=1` para girar objetos que não são imagem (cena `grad_rot`). Sem isso ele
-pula o objeto em silêncio.
+The only mandatory configuration difference: v8 with 16-bit color needs `LV_COLOR_SCREEN_TRANSP=1`
+to rotate objects that are not images (scene `grad_rot`). Without it, it silently skips the object.
 
-Os tempos de cada quadro ficam em RAM durante a medida e só depois saem pela USB nativa do S3, uma
-linha CSV por quadro. O `bench.py` captura um ciclo completo, confere se nenhuma linha se perdeu e
-grava em `results/`.
+The time of each frame is kept in RAM during the measurement and only then goes out over the S3's
+native USB, one CSV line per frame. `bench.py` captures a full cycle, checks that no line was lost
+and saves it to `results/`.
 
-## Resultados
+## Results
 
-### Renderização: v8 × v9
+### Rendering: v8 × v9
 
-![Tempo de renderização por quadro, v8 e v9](docs/render-v8-v9.svg)
+![Rendering time per frame, v8 and v9](docs/render-v8-v9.svg)
 
-| cena | o que desenha | v8 (ms) | v9 (ms) | v9 vs v8 |
+| scene | what it draws | v8 (ms) | v9 (ms) | v9 vs v8 |
 |---|---|---:|---:|---:|
-| `fill` | só o fundo da tela | 0,53 | 0,77 | +44% |
-| `gradient` | degradê vertical na tela toda | 1,50 | 1,58 | +5% |
-| `rects` | 24 retângulos arredondados com borda | 10,11 | 11,40 | +13% |
-| `rects_opa` | os mesmos, a 50% de opacidade | 24,45 | 16,67 | −32% |
-| `shadow` | 6 retângulos com sombra larga | 27,07 | 24,22 | −11% |
-| `text` | parágrafo em 14 px + título em 28 px | 34,35 | 15,70 | −54% |
-| `image` | 15 imagens RGB565 de 64×64 | 2,93 | 4,79 | +64% |
-| `image_opa` | as mesmas, a 50% de opacidade | 13,70 | 10,28 | −25% |
-| `rotate` | imagem ampliada 2× girando | 21,44 | 12,72 | −41% |
-| `arc` | 4 arcos concêntricos | 11,30 | 10,45 | −8% |
-| `grad_rot` | 8 círculos com degradê girando | 50,73 | 71,07 | +40% |
-| `ui` | gráfico, medidor, barra, slider, switch e lista rolando | 21,83 | 29,75 | +36% |
+| `fill` | only the screen background | 0.53 | 0.77 | +44% |
+| `gradient` | vertical gradient over the whole screen | 1.50 | 1.58 | +5% |
+| `rects` | 24 rounded rectangles with border | 10.11 | 11.40 | +13% |
+| `rects_opa` | the same, at 50% opacity | 24.45 | 16.67 | −32% |
+| `shadow` | 6 rectangles with a wide shadow | 27.07 | 24.22 | −11% |
+| `text` | 14 px paragraph + 28 px title | 34.35 | 15.70 | −54% |
+| `image` | 15 RGB565 images of 64×64 | 2.93 | 4.79 | +64% |
+| `image_opa` | the same, at 50% opacity | 13.70 | 10.28 | −25% |
+| `rotate` | 2× magnified image rotating | 21.44 | 12.72 | −41% |
+| `arc` | 4 concentric arcs | 11.30 | 10.45 | −8% |
+| `grad_rot` | 8 rotating circles with gradient | 50.73 | 71.07 | +40% |
+| `ui` | chart, meter, bar, slider, switch and scrolling list | 21.83 | 29.75 | +36% |
 
-### Por que o v9 perde no `ui`
+### Why v9 loses in `ui`
 
-Para isolar a causa, cada parte da cena `ui` foi medida sozinha, num teste sem janela no PC (x86,
-clang `-O2`; os valores absolutos não valem para o S3, só a proporção entre as versões):
+To isolate the cause, each part of the `ui` scene was measured on its own, in a headless test on
+the PC (x86, clang `-O2`; the absolute values do not apply to the S3, only the ratio between the
+versions):
 
-| parte da `ui` | v8 | v9 | v9 vs v8 |
+| `ui` part | v8 | v9 | v9 vs v8 |
 |---|---:|---:|---:|
-| gráfico (40 pontos) com sombra | 0,138 ms | 0,191 ms | +38% |
-| lista com 15 itens rolando | 0,079 ms | 0,096 ms | +22% |
-| medidor + rótulo | 0,045 ms | 0,043 ms | −3% |
-| barra, slider e switch | 0,023 ms | 0,028 ms | +21% |
-| **tela completa** | **0,338 ms** | **0,409 ms** | **+21%** |
+| chart (40 points) with shadow | 0.138 ms | 0.191 ms | +38% |
+| list with 15 items scrolling | 0.079 ms | 0.096 ms | +22% |
+| meter + label | 0.045 ms | 0.043 ms | −3% |
+| bar, slider and switch | 0.023 ms | 0.028 ms | +21% |
+| **full screen** | **0.338 ms** | **0.409 ms** | **+21%** |
 
-O gráfico responde por três quartos da diferença e a lista pelo resto. Variando o número de pontos do
-gráfico (10 a 160), cada segmento a mais custa ~2,9 µs no v8 e ~4,1 µs no v9, e cada pontinho mais
-~0,8 µs no v9 (no v8 é quase de graça).
-No v9 cada primitiva vira uma tarefa de desenho (*draw task*) com custo fixo próprio; isso compensa
-quando a primitiva cobre muitos pixels (texto, transparência) e pesa quando são muitas primitivas
-pequenas (linhas de gráfico, pontos, camadas pequenas). O mesmo padrão aparece em `fill`, `rects` e `image`.
+The chart accounts for three quarters of the difference and the list for the rest. Varying the number
+of chart points (10 to 160), each extra segment costs ~2.9 µs in v8 and ~4.1 µs in v9, and each extra
+dot ~0.8 µs in v9 (in v8 it is almost free).
+In v9 each primitive becomes a *draw task* with its own fixed cost; this pays off when the primitive
+covers many pixels (text, transparency) and hurts when there are many small primitives (chart lines,
+dots, small layers). The same pattern shows up in `fill`, `rects` and `image`.
 
-### Um núcleo × dois núcleos (v9)
+### One core × two cores (v9)
 
-O v9 consegue dividir o desenho entre threads (`LV_USE_OS=FREERTOS` + `LV_DRAW_SW_DRAW_UNIT_CNT=2`).
-Neste cenário isso piorou tudo. Tempos de renderização em ms:
+v9 can split the drawing between threads (`LV_USE_OS=FREERTOS` + `LV_DRAW_SW_DRAW_UNIT_CNT=2`).
+In this scenario it made everything worse. Rendering times in ms:
 
-| cena | v9 | v9 + FreeRTOS | v9 + 2 núcleos |
+| scene | v9 | v9 + FreeRTOS | v9 + 2 cores |
 |---|---:|---:|---:|
-| `fill` | 0,77 | 0,87 (+14%) | 1,47 (+92%) |
-| `gradient` | 1,58 | 1,68 (+7%) | 2,72 (+73%) |
-| `rects` | 11,40 | 14,74 (+29%) | 20,05 (+76%) |
-| `rects_opa` | 16,67 | 20,01 (+20%) | 25,31 (+52%) |
-| `shadow` | 24,22 | 25,38 (+5%) | 38,19 (+58%) |
-| `text` | 15,70 | 16,25 (+3%) | 23,33 (+49%) |
-| `image` | 4,79 | 5,47 (+14%) | 9,00 (+88%) |
-| `image_opa` | 10,28 | 10,94 (+6%) | 14,48 (+41%) |
-| `rotate` | 12,72 | 12,69 (−0%) | 14,35 (+13%) |
-| `arc` | 10,45 | 11,73 (+12%) | 17,03 (+63%) |
-| `grad_rot` | 71,07 | 71,22 (+0%) | 89,30 (+26%) |
-| `ui` | 29,75 | 36,54 (+23%) | 52,06 (+75%) |
+| `fill` | 0.77 | 0.87 (+14%) | 1.47 (+92%) |
+| `gradient` | 1.58 | 1.68 (+7%) | 2.72 (+73%) |
+| `rects` | 11.40 | 14.74 (+29%) | 20.05 (+76%) |
+| `rects_opa` | 16.67 | 20.01 (+20%) | 25.31 (+52%) |
+| `shadow` | 24.22 | 25.38 (+5%) | 38.19 (+58%) |
+| `text` | 15.70 | 16.25 (+3%) | 23.33 (+49%) |
+| `image` | 4.79 | 5.47 (+14%) | 9.00 (+88%) |
+| `image_opa` | 10.28 | 10.94 (+6%) | 14.48 (+41%) |
+| `rotate` | 12.72 | 12.69 (−0%) | 14.35 (+13%) |
+| `arc` | 10.45 | 11.73 (+12%) | 17.03 (+63%) |
+| `grad_rot` | 71.07 | 71.22 (+0%) | 89.30 (+26%) |
+| `ui` | 29.75 | 36.54 (+23%) | 52.06 (+75%) |
 
-A coluna do meio separa o custo de só ligar o OS (tarefas trocadas por sincronização) do custo de
-dividir entre os núcleos. A hipótese mais provável é que, com buffers de 40 linhas e muitas
-primitivas pequenas, a sincronização entre as threads custa mais do que o segundo núcleo economiza.
-Isso não foi investigado a fundo.
+The middle column separates the cost of just enabling the OS (task switches for synchronization) from
+the cost of splitting across the cores. The most likely hypothesis is that, with 40-line buffers and
+many small primitives, the synchronization between the threads costs more than the second core saves.
+This was not investigated in depth.
 
-### Clock do barramento do LCD
+### LCD bus clock
 
-![FPS com envio à tela em função do PCLK](docs/fps-pclk.svg)
+![FPS with display transfer as a function of PCLK](docs/fps-pclk.svg)
 
-O S3 gera o PCLK como 80 MHz / n, então os valores possíveis são 40, 26,67, 20, 16, 13,33, … e 6,67 MHz
-(este é o que o valor do exemplo da LilyGO, 6,528 MHz, vira de fato). Um quadro inteiro tem 108.800
-bytes, então o barramento sozinho limita a ~61 FPS a 6,67 MHz e a ~367 FPS a 40 MHz.
+The S3 generates PCLK as 80 MHz / n, so the possible values are 40, 26.67, 20, 16, 13.33, … and
+6.67 MHz (this is what the LilyGO example value, 6.528 MHz, actually becomes). A full frame is 108,800
+bytes, so the bus alone limits to ~61 FPS at 6.67 MHz and to ~367 FPS at 40 MHz.
 
 <details>
-<summary>FPS de todas as cenas em todos os clocks</summary>
+<summary>FPS of all scenes at all clocks</summary>
 
 LVGL 8.4:
 
-| cena | 6,67 MHz | 10 MHz | 16 MHz | 20 MHz | 26,67 MHz | 40 MHz |
+| scene | 6.67 MHz | 10 MHz | 16 MHz | 20 MHz | 26.67 MHz | 40 MHz |
 |---|---:|---:|---:|---:|---:|---:|
 | `fill` | 60 | 89 | 140 | 172 | 225 | 325 |
 | `gradient` | 59 | 87 | 136 | 167 | 215 | 305 |
@@ -152,7 +151,7 @@ LVGL 8.4:
 
 LVGL 9.6:
 
-| cena | 6,67 MHz | 10 MHz | 16 MHz | 20 MHz | 26,67 MHz | 40 MHz |
+| scene | 6.67 MHz | 10 MHz | 16 MHz | 20 MHz | 26.67 MHz | 40 MHz |
 |---|---:|---:|---:|---:|---:|---:|
 | `fill` | 60 | 88 | 138 | 170 | 221 | 316 |
 | `gradient` | 59 | 87 | 135 | 165 | 213 | 299 |
@@ -169,16 +168,16 @@ LVGL 9.6:
 
 </details>
 
-O ST7789 é especificado para ~15 MHz no modo 8080; acima disso funcionar ou não depende da placa.
-Os tempos foram medidos até 40 MHz, mas confira a imagem na sua antes de usar um clock alto num produto.
+The ST7789 is specified for ~15 MHz in 8080 mode; above that, whether it works depends on the board.
+The times were measured up to 40 MHz, but check the image on yours before using a high clock in a product.
 
-### Benchmark oficial do LVGL (`lv_demo_benchmark`)
+### Official LVGL benchmark (`lv_demo_benchmark`)
 
-Cada versão traz o seu benchmark, com **cenas e métricas diferentes**: os números de um não se
-comparam com os do outro, e é por isso que este projeto tem cenas próprias. Os dois rodaram aqui
-com o LCD a 20 e a 40 MHz; os resumos completos estão em `results/*-demo@*.txt`.
+Each version ships its own benchmark, with **different scenes and metrics**: the numbers of one
+cannot be compared with those of the other, which is why this project has its own scenes. Both were
+run here with the LCD at 20 and 40 MHz; the full summaries are in `results/*-demo@*.txt`.
 
-**LVGL 8.4** (modo de velocidade máxima, FPS calculado pelo tempo de redesenho da área que mudou):
+**LVGL 8.4** (maximum speed mode, FPS computed from the redraw time of the area that changed):
 
 | | 20 MHz | 40 MHz |
 |---|---:|---:|
@@ -189,11 +188,11 @@ com o LCD a 20 e a 40 MHz; os resumos completos estão em `results/*-demo@*.txt`
 | Image RGB rotate anti aliased | 91 | 98 |
 | Rectangle | 383 | 566 |
 
-As cenas de fonte comprimida deram 0 FPS nas duas medidas (não investigado).
+The compressed-font scenes gave 0 FPS in both measurements (not investigated).
 
 **LVGL 9.6:**
 
-| cena | FPS (20 MHz) | FPS (40 MHz) | render (ms) |
+| scene | FPS (20 MHz) | FPS (40 MHz) | render (ms) |
 |---|---:|---:|---:|
 | Empty screen | 127 | 176 | 4 |
 | Moving wallpaper | 717 | 744 | 7 |
@@ -211,84 +210,86 @@ As cenas de fonte comprimida deram 0 FPS nas duas medidas (não investigado).
 | Containers with opa_layer | 675 | 675 | 15 |
 | Containers with scrolling | 68 | 69 | 12 |
 | Widgets demo | 91 | 91 | 8 |
-| **média** | **506** | **510** | **7** |
+| **average** | **506** | **510** | **7** |
 
-Os dois quase não mudam de 20 para 40 MHz: as cenas oficiais redesenham áreas pequenas (o v9 mede
-0 ms de envio na maioria), então quem limita é a CPU. A coluna "Avg. CPU" do v9 (80–99%) só reflete
-o laço de medida, que nunca dorme.
+Both barely change from 20 to 40 MHz: the official scenes redraw small areas (v9 reports 0 ms of
+flush time in most), so the CPU is the limit. The v9 "Avg. CPU" column (80–99%) only reflects the
+measurement loop, which never sleeps.
 
-## Como rodar
+## How to run
 
-Você precisa do ESP-IDF 5.5 (testado com o 5.5.4) e de uma T-Display-S3 ligada pela USB-C. Em um
-terminal com o ESP-IDF ativado (ele já traz o Python com `pyserial`):
+You need ESP-IDF 5.5 (tested with 5.5.4) and a T-Display-S3 connected over USB-C. In a terminal with
+ESP-IDF activated (it already ships Python with `pyserial`):
 
 ```sh
-python bench.py run v9 COM6        # compila, grava, captura e salva results/v9.csv
-python bench.py run v8@40 COM6     # mesma coisa com o LCD a 40 MHz
+python bench.py run v9 COM6        # builds, flashes, captures and saves results/v9.csv
+python bench.py run v8@40 COM6     # same thing with the LCD at 40 MHz
 python bench.py compare results/v8.csv results/v9.csv
-python docs/charts.py              # refaz os gráficos e imprime as tabelas
+python docs/charts.py              # regenerates the charts and prints the tables
 ```
 
-A porta é opcional (sem ela o `bench.py` procura a USB da Espressif). Variantes:
+The port is optional (without it `bench.py` looks for the Espressif USB). Variants:
 
-| variante | o que é |
+| variant | what it is |
 |---|---|
-| `v8`, `v9` | a base da comparação, LVGL sem OS, um núcleo |
-| `v9-freertos` | v9 com `LV_USE_OS=FREERTOS` e uma unidade de desenho |
-| `v9-mt` | v9 com FreeRTOS e duas unidades de desenho (os dois núcleos) |
-| `v8-demo`, `v9-demo` | o `lv_demo_benchmark` oficial de cada versão |
-| `…@MHz` | qualquer uma acima com outro clock no LCD, por exemplo `v9-demo@40` |
+| `v8`, `v9` | the comparison baseline, LVGL without OS, one core |
+| `v9-freertos` | v9 with `LV_USE_OS=FREERTOS` and one draw unit |
+| `v9-mt` | v9 with FreeRTOS and two draw units (both cores) |
+| `v8-demo`, `v9-demo` | the official `lv_demo_benchmark` of each version |
+| `…@MHz` | any of the above with another LCD clock, for example `v9-demo@40` |
 
-Cada variante compila em `v8/build-<variante>` ou `v9/build-<variante>`; trocar só o clock recompila
-apenas o `main`. Se a placa reiniciar no meio da captura (travamento), o `bench.py` para e mostra o log.
+Each variant builds into `v8/build-<variant>` or `v9/build-<variant>`; changing only the clock
+rebuilds just `main`. If the board resets in the middle of the capture (crash), `bench.py` stops and
+shows the log.
 
-### Simulador no PC
+### PC simulator
 
-`sim/` roda as mesmas cenas com LVGL 9 e SDL2 numa janela 3× maior, para ver como cada cena deve
-ficar na tela. Com `--demo`, roda o `lv_demo_benchmark`. Ele usa o LVGL que o ESP-IDF baixa para
-`v9/managed_components`, então compile o `v9` antes. Sem SDL2 instalado, o CMake do LVGL baixa e
-compila o SDL2 sozinho.
+`sim/` runs the same scenes with LVGL 9 and SDL2 in a window 3× larger, to see how each scene should
+look on the screen. With `--demo`, it runs `lv_demo_benchmark`. It uses the LVGL that ESP-IDF
+downloads to `v9/managed_components`, so build `v9` first. Without SDL2 installed, the LVGL CMake
+downloads and builds SDL2 by itself.
 
 ```sh
-# Linux (com libsdl2-dev instalado) ou macOS
+# Linux (with libsdl2-dev installed) or macOS
 cmake -S sim -B sim/build -G Ninja && cmake --build sim/build && sim/build/lvgl_bench_sim
 
-# Windows com LLVM (clang) e Visual Studio Build Tools
+# Windows with LLVM (clang) and Visual Studio Build Tools
 cmake -S sim -B sim/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_RC_COMPILER=llvm-rc
 cmake --build sim/build
 sim\build\lvgl_bench_sim.exe --demo
 ```
 
-## Estrutura
+## Structure
 
 ```
-bench.c            firmware: driver do LCD, medição e envio pela USB (compila no v8 e no v9)
-scenes.c, .h       as 12 cenas, com a API comum às duas versões
-bench.py           compilação, gravação, captura e comparação
-sdkconfig.common   configuração comum (CPU, caches, console USB, fontes, IRAM)
-v8/, v9/           projetos ESP-IDF; cada um puxa a sua versão do LVGL
-sim/               simulador no PC (LVGL 9 + SDL2)
-results/           dados brutos: um CSV por variante (tempo de cada quadro) e os resumos do benchmark oficial
-docs/              gráficos (gerados por charts.py a partir de results/) e a imagem das cenas
+bench.c            firmware: LCD driver, measurement and USB output (builds on both v8 and v9)
+scenes.c, .h       the 12 scenes, with the API common to both versions
+bench.py           build, flash, capture and comparison
+sdkconfig.common   common configuration (CPU, caches, USB console, fonts, IRAM)
+v8/, v9/           ESP-IDF projects; each one pulls its own LVGL version
+sim/               PC simulator (LVGL 9 + SDL2)
+results/           raw data: one CSV per variant (time of each frame) and the official benchmark summaries
+docs/              charts (generated by charts.py from results/) and the scenes image
 ```
 
-## Problemas encontrados no caminho
+## Problems found along the way
 
-- **Lixo em partes aleatórias da tela.** As T-Display-S3 mais novas vêm com outro lote de tela e
-  precisam da sequência de inicialização extra da LilyGO (`LCD_MODULE_CMD_1` nos exemplos deles). Ela
-  está em `lilygo_init` no `bench.c`.
-- **A USB não aparece ou dá erro 31 / "falha na solicitação de descritor".** Segure BOOT, aperte RST
-  e solte BOOT para entrar no modo de gravação; se nem assim aparecer, o cabo é só de carga.
-- **O v8 não desenha objetos girados.** Com cor de 16 bits ele precisa de `LV_COLOR_SCREEN_TRANSP=1`;
-  sem isso só registra um aviso no log e pula o objeto, e o quadro sai barato demais. Foi um teste
-  sem janela no PC, salvando os quadros das duas versões em PNG, que mostrou isso.
-- **Estouro de pilha com LVGL + FreeRTOS.** A tarefa `main` do ESP-IDF tem 3,5 KB por padrão, o que
-  estoura na cena `ui`; aqui ela tem 16 KB.
-- **O PCLK pedido não é o PCLK real.** O driver i80 arredonda o divisor para baixo, então um valor
-  entre 26,67 e 40 MHz vira 40 MHz. O `bench.py` já escolhe o 80/n mais próximo.
-- **O `lv_demo_benchmark` precisa do tick andando durante o desenho.** Ele mede com o relógio do LVGL;
-  com `lv_tick_inc` só entre as chamadas de `lv_timer_handler` os quadros parecem levar 0 ms e o FPS
-  explode. Aqui o tick vem de um `esp_timer` de 1 ms.
-- No v9.6 o `lv_list` usado na cena `ui` está marcado como obsoleto (funciona, mas gera aviso). No v8 o
-  switch da `ui` aparece cinza porque a animação de cor do tema depende do tick, que não anda nas
-  cenas medidas; isso não muda o custo do quadro.
+- **Garbage in random parts of the screen.** Newer T-Display-S3 boards come with a different display
+  batch and need LilyGO's extra initialization sequence (`LCD_MODULE_CMD_1` in their examples). It is
+  in `lilygo_init` in `bench.c`.
+- **USB does not show up or gives error 31 / "Device Descriptor Request Failed".** Hold BOOT, press
+  RST and release BOOT to enter flashing mode; if it still does not show up, the cable is
+  charge-only.
+- **v8 does not draw rotated objects.** With 16-bit color it needs `LV_COLOR_SCREEN_TRANSP=1`;
+  without it, it only logs a warning and skips the object, and the frame comes out too cheap. A
+  headless test on the PC, saving the frames of both versions as PNG, revealed this.
+- **Stack overflow with LVGL + FreeRTOS.** The ESP-IDF `main` task has 3.5 KB by default, which
+  overflows in the `ui` scene; here it has 16 KB.
+- **The requested PCLK is not the real PCLK.** The i80 driver rounds the divider down, so a value
+  between 26.67 and 40 MHz becomes 40 MHz. `bench.py` already picks the closest 80/n.
+- **`lv_demo_benchmark` needs the tick running during drawing.** It measures with the LVGL clock;
+  with `lv_tick_inc` only between the `lv_timer_handler` calls, the frames seem to take 0 ms and the
+  FPS explodes. Here the tick comes from a 1 ms `esp_timer`.
+- In v9.6 the `lv_list` used in the `ui` scene is marked as deprecated (it works, but produces a
+  warning). In v8 the `ui` switch appears gray because the theme's color animation depends on the
+  tick, which does not run in the measured scenes; this does not change the frame cost.
