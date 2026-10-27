@@ -1,0 +1,99 @@
+LVGL v8.4.0  Benchmark (in csv format)
+Weighted FPS: 483
+Opa. speed: 35%
+Rectangle,566
+Rectangle + opa,105
+Rectangle rounded,313
+Rectangle rounded + opa,95
+Circle,173
+Circle + opa,92
+Border,494
+Border + opa,294
+Border rounded,292
+Border rounded + opa,227
+Circle border,133
+Circle border + opa,126
+Border top,337
+Border top + opa,273
+Border left,369
+Border left + opa,353
+Border top + left,304
+Border top + left + opa,243
+Border left + right,288
+Border left + right + opa,257
+Border top + bottom,298
+Border top + bottom + opa,253
+Shadow small,82
+Shadow small + opa,75
+Shadow small offset,83
+Shadow small offset + opa,71
+Shadow large,34
+Shadow large + opa,32
+Shadow large offset,37
+Shadow large offset + opa,36
+Image RGB,7312
+Image RGB + opa,702
+Image ARGB,1221
+Image ARGB + opa,710
+Image chorma keyed,1785
+Image chorma keyed + opa,781
+Image indexed,578
+Image indexed + opa,463
+Image alpha only,619
+Image alpha only + opa,474
+Image RGB recolor,748
+Image RGB recolor + opa,429
+Image ARGB recolor,555
+Image ARGB recolor + opa,466
+Image chorma keyed recolor,640
+Image chorma keyed recolor + opa,475
+Image indexed recolor,406
+Image indexed recolor + opa,358
+Image RGB rotate,259
+Image RGB rotate + opa,169
+Image RGB rotate anti aliased,98
+Image RGB rotate anti aliased + opa,80
+Image ARGB rotate,221
+Image ARGB rotate + opa,184
+Image ARGB rotate anti aliased,84
+Image ARGB rotate anti aliased + opa,78
+Image RGB zoom,575
+Image RGB zoom + opa,303
+Image RGB zoom anti aliased,183
+Image RGB zoom anti aliased + opa,152
+Image ARGB zoom,408
+Image ARGB zoom + opa,380
+Image ARGB zoom anti aliased,156
+Image ARGB zoom anti aliased + opa,149
+Text small,37
+Text small + opa,39
+Text medium,37
+Text medium + opa,38
+Text large,38
+Text large + opa,39
+Text small compressed,0
+Text small compressed + opa,0
+Text medium compressed,0
+Text medium compressed + opa,0
+Text large compressed,0
+Text large compressed + opa,0
+Line,162
+Line + opa,167
+Arc think,189
+Arc think + opa,184
+Arc thick,192
+Arc thick + opa,180
+Substr. rectangle,88
+Substr. rectangle + opa,72
+Substr. border,102
+Substr. border + opa,102
+Substr. shadow,32
+Substr. shadow + opa,34
+Substr. image,414
+Substr. image + opa,398
+Substr. line,84
+Substr. line + opa,88
+Substr. arc,191
+Substr. arc + opa,183
+Substr. text,28
+Substr. text + opa,28

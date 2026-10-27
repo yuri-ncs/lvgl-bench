@@ -1,0 +1,3 @@
+# malloc/memcpy da libc, como no v8
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_LV_USE_CLIB_STRING=y
