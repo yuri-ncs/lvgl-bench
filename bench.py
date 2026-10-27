@@ -1,4 +1,4 @@
-"""Build, gravação e captura do benchmark LVGL pela USB do T-Display-S3 (USB-Serial-JTAG).
+"""Compilação, gravação e captura do benchmark LVGL pela USB do T-Display-S3 (USB-Serial-JTAG).
 
 Rode num terminal com o ESP-IDF ativado (precisa de idf.py e pyserial):
 
@@ -7,8 +7,8 @@ Rode num terminal com o ESP-IDF ativado (precisa de idf.py e pyserial):
   python bench.py compare a.csv b.csv ...  tabela lado a lado (ms médio por quadro, % vs o primeiro)
 
 Variantes: v8, v9, v9-freertos, v9-mt, v8-demo, v9-demo
-Sufixo @MHz muda o clock do barramento do LCD (padrão 6.67): v8@20, v9@20, v9-demo@20...
-O S3 só gera 80 MHz / n: 40, 26.67, 20, 16, 13.33, 11.43, 10 ... 6.67; outros valores vão para o mais próximo.
+Sufixo @MHz muda o clock do barramento do LCD (padrão 6,67): v8@20, v9@20, v9-demo@20...
+O S3 só gera 80 MHz / n: 40, 26,67, 20, 16, 13,33, 11,43, 10 ... 6,67; outros valores vão para o mais próximo.
 """
 import csv
 import os
@@ -43,14 +43,14 @@ def open_port(port=None):
 def run(variant, port=None):
     base, _, mhz = variant.partition("@")  # "v9@20": v9 com o barramento do LCD a 20 MHz
     proj, extra = VARIANTS[base]
-    build = f"build-{base}"  # mesmo build dir: trocar o clock só recompila o main
+    build = f"build-{base}"  # mesmo diretório de compilação: trocar o clock só recompila o main
     # o S3 só gera PCLK = 80 MHz / n (n >= 2) e o driver arredonda n para baixo; pede o 80/n mais próximo
     hz = int(80e6 / max(2, round(80 / float(mhz)))) if mhz else 0
     idf = [sys.executable, str(Path(os.environ["IDF_PATH"]) / "tools" / "idf.py"), "-B", build,
            f"-DSDKCONFIG={build}/sdkconfig", f"-DBENCH_PCLK_HZ={hz}",
            "-DSDKCONFIG_DEFAULTS=" + ";".join(["../sdkconfig.common", "sdkconfig.defaults", *extra])]
     cwd = ROOT / proj
-    # no primeiro build de um diretório novo o IDF às vezes pede "re-run" por causa do sdkconfig fora do padrão
+    # na primeira compilação de um diretório novo o IDF às vezes pede "re-run" por causa do sdkconfig fora do padrão
     if subprocess.run(idf + ["build"], cwd=cwd).returncode:
         subprocess.run(idf + ["build"], cwd=cwd, check=True)
     if port:
@@ -60,7 +60,7 @@ def run(variant, port=None):
 
 
 def read_line(ser, log):
-    """Lê uma linha; se a placa reiniciar (crash), para com as últimas linhas de log em vez de esperar para sempre."""
+    """Lê uma linha; se a placa reiniciar (travamento), para com as últimas linhas de log em vez de esperar para sempre."""
     line = ser.readline().decode(errors="replace").strip()
     if not line.startswith("F,"):
         log.append(line)
@@ -125,7 +125,7 @@ def compare(files):
         cells = []
         for n in names:
             m = statistics.mean(runs[n][k])
-            cells.append(f"{m:.2f}" + (f" ({100 * (m / base - 1):+.0f}%)" if n != names[0] else ""))
+            cells.append(f"{m:.2f}".replace(".", ",") + (f" ({100 * (m / base - 1):+.0f}%)" if n != names[0] else ""))
         print(f"{k[0]:<12}{k[1]:<8}" + "".join(f"{c:>{w}}" for c in cells))
 
 

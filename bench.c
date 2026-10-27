@@ -1,7 +1,6 @@
 /* Benchmark de renderização LVGL 8.4 x 9.x no LilyGO T-Display-S3 (ST7789 320x170, i80 8 bits).
  * O mesmo arquivo compila nas duas versões; as diferenças de API ficam nos #if e em scenes.h. */
 #include <stdio.h>
-#include <stdatomic.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
@@ -23,34 +22,43 @@
 #ifndef PCLK_HZ
 #define PCLK_HZ 6528000 // clock do LCD do exemplo da LilyGO; o S3 só gera 80 MHz / n, então vira 6,67 MHz. Mude com "bench.py run v9@20"
 #endif
+#define PIN_LCD_POWER 15      // alimentação do LCD (necessária na bateria)
+#define PIN_LCD_RD    9       // RD inativo
+#define PIN_BACKLIGHT 38      // luz de fundo
+#define PIN_LCD_DC    7
+#define PIN_LCD_WR    8
+#define PIN_LCD_CS    6
+#define PIN_LCD_RESET 5
+#define PIN_LCD_DATA  { 39, 40, 41, 42, 45, 46, 47, 48 } // D0..D7
 
 static esp_lcd_panel_handle_t panel;
-static lv_display_t *disp;
-static bool null_flush;    // true: descarta os pixels, mede só a CPU renderizando
-static atomic_int pending; // transferências DMA ainda em andamento
-static int flushes;
+static lv_display_t *lvgl_display;
+static bool null_flush;            // true: descarta os pixels, mede só a CPU renderizando
+static volatile uint32_t dma_sent; // só a task escreve (flush_cb)
+static volatile uint32_t dma_done; // só a ISR do DMA escreve (on_trans_done)
+static int flush_count;
 
 #if LVGL_VERSION_MAJOR < 9
-static lv_disp_drv_t drv;
-#define FLUSH_READY() lv_disp_flush_ready(&drv)
-static void flush_cb(lv_disp_drv_t *d, const lv_area_t *a, lv_color_t *px)
+static lv_disp_drv_t display_driver;
+#define FLUSH_READY() lv_disp_flush_ready(&display_driver)
+static void flush_cb(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *pixels)
 #else
-#define FLUSH_READY() lv_display_flush_ready(disp)
-static void flush_cb(lv_display_t *d, const lv_area_t *a, uint8_t *px)
+#define FLUSH_READY() lv_display_flush_ready(lvgl_display)
+static void flush_cb(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
 #endif
 {
-    flushes++;
+    flush_count++;
     if (null_flush) {
         FLUSH_READY();
         return;
     }
-    pending++;
-    esp_lcd_panel_draw_bitmap(panel, a->x1, a->y1, a->x2 + 1, a->y2 + 1, px);
+    dma_sent++;
+    esp_lcd_panel_draw_bitmap(panel, area->x1, area->y1, area->x2 + 1, area->y2 + 1, pixels);
 }
 
-static bool on_trans_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *e, void *ctx)
+static bool on_trans_done(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *event_data, void *user_ctx)
 {
-    pending--;
+    dma_done++;
     FLUSH_READY();
     return false;
 }
@@ -58,7 +66,7 @@ static bool on_trans_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_d
 /* Sequência da LilyGO para o lote novo de telas (LCD_MODULE_CMD_1 nos exemplos deles);
  * sem ela aparece lixo em partes da tela. */
 static const struct {
-    uint8_t cmd, len, data[14];
+    uint8_t command, length, data[14];
 } lilygo_init[] = {
     { 0x3A, 1, { 0x05 } },
     { 0xB2, 5, { 0x0B, 0x0B, 0x00, 0x33, 0x33 } },
@@ -77,31 +85,33 @@ static const struct {
 
 static void lcd_init(void)
 {
-    gpio_config_t out = { .pin_bit_mask = 1ULL << 15 | 1ULL << 9 | 1ULL << 38, .mode = GPIO_MODE_OUTPUT };
-    ESP_ERROR_CHECK(gpio_config(&out));
-    gpio_set_level(15, 1); // alimentação do LCD (necessária na bateria)
-    gpio_set_level(9, 1);  // RD inativo
+    gpio_config_t output_config = {
+        .pin_bit_mask = 1ULL << PIN_LCD_POWER | 1ULL << PIN_LCD_RD | 1ULL << PIN_BACKLIGHT, .mode = GPIO_MODE_OUTPUT,
+    };
+    ESP_ERROR_CHECK(gpio_config(&output_config));
+    gpio_set_level(PIN_LCD_POWER, 1);
+    gpio_set_level(PIN_LCD_RD, 1);
 
     esp_lcd_i80_bus_handle_t bus;
-    esp_lcd_i80_bus_config_t bus_cfg = {
-        .dc_gpio_num = 7, .wr_gpio_num = 8, .clk_src = LCD_CLK_SRC_DEFAULT,
-        .data_gpio_nums = { 39, 40, 41, 42, 45, 46, 47, 48 },
+    esp_lcd_i80_bus_config_t bus_config = {
+        .dc_gpio_num = PIN_LCD_DC, .wr_gpio_num = PIN_LCD_WR, .clk_src = LCD_CLK_SRC_DEFAULT,
+        .data_gpio_nums = PIN_LCD_DATA,
         .bus_width = 8, .max_transfer_bytes = H_RES * BUF_LINES * 2,
     };
-    ESP_ERROR_CHECK(esp_lcd_new_i80_bus(&bus_cfg, &bus));
+    ESP_ERROR_CHECK(esp_lcd_new_i80_bus(&bus_config, &bus));
 
-    esp_lcd_panel_io_handle_t io;
-    esp_lcd_panel_io_i80_config_t io_cfg = {
-        .cs_gpio_num = 6, .pclk_hz = PCLK_HZ, .trans_queue_depth = 10,
+    esp_lcd_panel_io_handle_t panel_io;
+    esp_lcd_panel_io_i80_config_t panel_io_config = {
+        .cs_gpio_num = PIN_LCD_CS, .pclk_hz = PCLK_HZ, .trans_queue_depth = 10,
         .on_color_trans_done = on_trans_done,
         .lcd_cmd_bits = 8, .lcd_param_bits = 8,
         .dc_levels = { .dc_data_level = 1 },
         .flags.swap_color_bytes = 1, // ST7789 quer RGB565 big-endian; o LCD_CAM troca em hardware, custo zero nas duas versões
     };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i80(bus, &io_cfg, &io));
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i80(bus, &panel_io_config, &panel_io));
 
-    esp_lcd_panel_dev_config_t pcfg = { .reset_gpio_num = 5, .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB, .bits_per_pixel = 16 };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io, &pcfg, &panel));
+    esp_lcd_panel_dev_config_t panel_config = { .reset_gpio_num = PIN_LCD_RESET, .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB, .bits_per_pixel = 16 };
+    ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(panel_io, &panel_config, &panel));
     esp_lcd_panel_reset(panel);
     esp_lcd_panel_init(panel);
     esp_lcd_panel_invert_color(panel, true);
@@ -109,31 +119,31 @@ static void lcd_init(void)
     esp_lcd_panel_mirror(panel, false, true);
     esp_lcd_panel_set_gap(panel, 0, 35);
     for (int i = 0; i < sizeof(lilygo_init) / sizeof(lilygo_init[0]); i++)
-        esp_lcd_panel_io_tx_param(io, lilygo_init[i].cmd, lilygo_init[i].data, lilygo_init[i].len);
+        esp_lcd_panel_io_tx_param(panel_io, lilygo_init[i].command, lilygo_init[i].data, lilygo_init[i].length);
     esp_lcd_panel_disp_on_off(panel, true);
-    gpio_set_level(38, 1); // backlight
+    gpio_set_level(PIN_BACKLIGHT, 1);
 }
 
 static void lvgl_init(void)
 {
     lv_init();
-    size_t sz = H_RES * BUF_LINES * sizeof(uint16_t);
-    void *b1 = heap_caps_malloc(sz, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    void *b2 = heap_caps_malloc(sz, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    ESP_ERROR_CHECK(b1 && b2 ? ESP_OK : ESP_ERR_NO_MEM);
+    size_t buffer_size = H_RES * BUF_LINES * sizeof(uint16_t);
+    void *buffer1 = heap_caps_malloc(buffer_size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    void *buffer2 = heap_caps_malloc(buffer_size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    ESP_ERROR_CHECK(buffer1 && buffer2 ? ESP_OK : ESP_ERR_NO_MEM);
 #if LVGL_VERSION_MAJOR < 9
-    static lv_disp_draw_buf_t draw_buf;
-    lv_disp_draw_buf_init(&draw_buf, b1, b2, H_RES * BUF_LINES);
-    lv_disp_drv_init(&drv);
-    drv.hor_res = H_RES;
-    drv.ver_res = V_RES;
-    drv.flush_cb = flush_cb;
-    drv.draw_buf = &draw_buf;
-    disp = lv_disp_drv_register(&drv);
+    static lv_disp_draw_buf_t draw_buffer;
+    lv_disp_draw_buf_init(&draw_buffer, buffer1, buffer2, H_RES * BUF_LINES);
+    lv_disp_drv_init(&display_driver);
+    display_driver.hor_res = H_RES;
+    display_driver.ver_res = V_RES;
+    display_driver.flush_cb = flush_cb;
+    display_driver.draw_buf = &draw_buffer;
+    lvgl_display = lv_disp_drv_register(&display_driver);
 #else
-    disp = lv_display_create(H_RES, V_RES);
-    lv_display_set_flush_cb(disp, flush_cb);
-    lv_display_set_buffers(disp, b1, b2, sz, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lvgl_display = lv_display_create(H_RES, V_RES);
+    lv_display_set_flush_cb(lvgl_display, flush_cb);
+    lv_display_set_buffers(lvgl_display, buffer1, buffer2, buffer_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
 #endif
 }
 
@@ -144,31 +154,31 @@ static void tick_cb(void *arg)
 }
 #endif
 
-static int rows;
+static int row_count;
 
 /* Redesenha a tela inteira FRAMES vezes e manda o tempo de cada quadro (us) pela USB depois da medida. */
-static void run(const scene_t *sc, bool to_lcd)
+static void run(const scene_t *scene, bool to_lcd)
 {
-    static int32_t us[FRAMES];
-    scene_load(sc);
+    static int32_t frame_us[FRAMES];
+    scene_load(scene);
     null_flush = !to_lcd;
-    lv_refr_now(disp); // primeiro quadro fora da medida (layout, caches)
-    while (pending) {}
+    lv_refr_now(lvgl_display); // primeiro quadro fora da medida (layout, caches)
+    while (dma_done != dma_sent) {}
 
-    flushes = 0;
-    for (int f = 0; f < FRAMES; f++) {
-        scene_step(f);
+    flush_count = 0;
+    for (int frame = 0; frame < FRAMES; frame++) {
+        scene_step(frame);
         lv_obj_invalidate(lv_screen_active());
-        int64_t t0 = esp_timer_get_time();
-        lv_refr_now(disp);
-        while (pending) {}
-        us[f] = esp_timer_get_time() - t0;
+        int64_t start_us = esp_timer_get_time();
+        lv_refr_now(lvgl_display);
+        while (dma_done != dma_sent) {}
+        frame_us[frame] = esp_timer_get_time() - start_us;
     }
     // sem isso um invalidate que não gera desenho daria um tempo absurdo de baixo
-    ESP_ERROR_CHECK(flushes >= FRAMES ? ESP_OK : ESP_FAIL);
-    for (int f = 0; f < FRAMES; f++)
-        printf("F,%s,%s,%d,%ld\n", sc->name, to_lcd ? "lcd" : "render", f, (long)us[f]);
-    rows += FRAMES;
+    ESP_ERROR_CHECK(flush_count >= FRAMES ? ESP_OK : ESP_FAIL);
+    for (int frame = 0; frame < FRAMES; frame++)
+        printf("F,%s,%s,%d,%ld\n", scene->name, to_lcd ? "lcd" : "render", frame, (long)frame_us[frame]);
+    row_count += FRAMES;
 }
 
 void app_main(void)
@@ -177,12 +187,12 @@ void app_main(void)
     lvgl_init();
 
 #if LV_USE_DEMO_BENCHMARK
-    // build "demo": roda o lv_demo_benchmark oficial, que imprime o próprio resumo pela USB ao terminar.
+    // compilação "demo": roda o lv_demo_benchmark oficial, que imprime o próprio resumo pela USB ao terminar.
     // Ele mede com o tick do LVGL, que precisa andar durante o desenho: esp_timer de 1 ms, igual nas duas versões.
-    esp_timer_handle_t tick;
+    esp_timer_handle_t tick_timer;
     const esp_timer_create_args_t tick_args = { .callback = tick_cb, .name = "lv_tick" };
-    ESP_ERROR_CHECK(esp_timer_create(&tick_args, &tick));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(tick, 1000));
+    ESP_ERROR_CHECK(esp_timer_create(&tick_args, &tick_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(tick_timer, 1000));
 #if LVGL_VERSION_MAJOR < 9
     lv_demo_benchmark_set_max_speed(true);
 #endif
@@ -192,19 +202,19 @@ void app_main(void)
 #endif
 
 #if LVGL_VERSION_MAJOR >= 9
-    int units = LV_DRAW_SW_DRAW_UNIT_CNT;
+    int draw_units = LV_DRAW_SW_DRAW_UNIT_CNT;
 #else
-    int units = 1;
+    int draw_units = 1;
 #endif
     // repete para sempre: o bench.py no PC pega o próximo ciclo completo, sem precisar resetar a placa
     while (1) {
-        printf("B,%d.%d.%d,%d\n", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, units);
-        rows = 0;
+        printf("B,%d.%d.%d,%d\n", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH, draw_units);
+        row_count = 0;
         for (int i = 0; i < scene_count; i++) {
             run(&scenes[i], false);
             run(&scenes[i], true);
         }
-        printf("E,%d\n", rows);
+        printf("E,%d\n", row_count);
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }

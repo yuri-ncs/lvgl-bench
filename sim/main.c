@@ -5,17 +5,17 @@
 #include "scenes.h"
 #include "lv_demos.h"
 
-static lv_display_t *disp;
-static int cur, frame;
+static lv_display_t *display;
+static int current_scene, frame;
 
-static void next_scene(lv_timer_t *t)
+static void next_scene(lv_timer_t *timer)
 {
-    scene_load(&scenes[cur]);
-    lv_sdl_window_set_title(disp, scenes[cur].name);
-    cur = (cur + 1) % scene_count;
+    scene_load(&scenes[current_scene]);
+    lv_sdl_window_set_title(display, scenes[current_scene].name);
+    current_scene = (current_scene + 1) % scene_count;
 }
 
-static void step(lv_timer_t *t)
+static void step(lv_timer_t *timer)
 {
     scene_step(frame++);
 }
@@ -23,8 +23,8 @@ static void step(lv_timer_t *t)
 int main(int argc, char **argv)
 {
     lv_init();
-    disp = lv_sdl_window_create(320, 170);
-    lv_sdl_window_set_zoom(disp, 3);
+    display = lv_sdl_window_create(320, 170);
+    lv_sdl_window_set_zoom(display, 3);
 
     if (argc > 1 && strcmp(argv[1], "--demo") == 0) {
         lv_demo_benchmark();

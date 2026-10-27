@@ -12,19 +12,19 @@
 #define lv_obj_set_style_image_opa lv_obj_set_style_img_opa
 #define lv_list_add_button         lv_list_add_btn
 #define lv_obj_set_style_transform_rotation lv_obj_set_style_transform_angle
-#define lv_obj_set_scrollable(o, en) ((en) ? lv_obj_add_flag : lv_obj_clear_flag)(o, LV_OBJ_FLAG_SCROLLABLE)
+#define lv_obj_set_scrollable(obj, enable) ((enable) ? lv_obj_add_flag : lv_obj_clear_flag)(obj, LV_OBJ_FLAG_SCROLLABLE)
 #endif
 
 typedef struct {
     const char *name;
-    void (*create)(lv_obj_t *s);
+    void (*create)(lv_obj_t *screen);
 } scene_t;
 
 extern const scene_t scenes[];
 extern const int scene_count;
 
 /* Limpa a tela ativa e monta a cena. */
-void scene_load(const scene_t *sc);
+void scene_load(const scene_t *scene);
 
 /* Mudança por quadro; só "rotate", "grad_rot" e "ui" animam. */
 void scene_step(int frame);

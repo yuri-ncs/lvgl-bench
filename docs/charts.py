@@ -24,6 +24,10 @@ text{font:12px system-ui,-apple-system,'Segoe UI',sans-serif;fill:var(--ink2);fo
 </style>"""
 
 
+def num(value, fmt=".2f"):  # número com vírgula decimal, como no README
+    return format(value, fmt).replace(".", ",")
+
+
 def load(name):
     path = RES / f"{name}.csv"
     if not path.exists():
@@ -72,15 +76,15 @@ def render_chart(v8, v9):
         y = top + i * row
         a, c = v8[(s, "render")], v9[(s, "render")]
         b.append(f'<text x="{L - 10}" y="{y + 16}" text-anchor="end">{s}</text>')
-        b.append(bar(L, y + 2, x(a) - L, 10, "s1", f"{s} · v8: {a:.2f} ms"))
-        b.append(bar(L, y + 14, x(c) - L, 10, "s2", f"{s} · v9: {c:.2f} ms"))
+        b.append(bar(L, y + 2, x(a) - L, 10, "s1", f"{s} · v8: {num(a)} ms"))
+        b.append(bar(L, y + 14, x(c) - L, 10, "s2", f"{s} · v9: {num(c)} ms"))
         d = 100 * (c / a - 1)
         b.append(f'<text x="{x(max(a, c)) + 6:.1f}" y="{y + 16}">{d:+.0f}%</text>'.replace("-", "−"))
     return svg(W, h, b)
 
 
 def fps_chart(series):
-    picks = [("fill", "fill · leve, limitada pelo barramento"), ("text", "text · texto anti-aliased"),
+    picks = [("fill", "fill · leve, limitada pelo barramento"), ("text", "text · texto suavizado"),
              ("ui", "ui · interface com widgets"), ("grad_rot", "grad_rot · camadas giradas")]
     W, PW, PH, top = 780, 370, 210, 84
     xs = lambda mhz, ox: ox + 44 + (mhz - 5) / 35 * (PW - 84)
@@ -103,7 +107,7 @@ def fps_chart(series):
             p = pts[v]
             b.append(f'<polyline class="l{cls}" points="{" ".join(f"{xs(m, ox):.1f},{ys(f):.1f}" for m, f in p)}"/>')
             for m, f in p:
-                b.append(f'<circle class="d{cls}" cx="{xs(m, ox):.1f}" cy="{ys(f):.1f}" r="4"><title>{scene} · v{v} · {m} MHz: {f:.0f} FPS</title></circle>')
+                b.append(f'<circle class="d{cls}" cx="{xs(m, ox):.1f}" cy="{ys(f):.1f}" r="4"><title>{scene} · v{v} · {num(m, "g")} MHz: {f:.0f} FPS</title></circle>')
             ends[v] = (xs(p[-1][0], ox) + 8, ys(p[-1][1]), p[-1][1])
         if abs(ends[8][1] - ends[9][1]) >= 14:
             for v in (8, 9):
@@ -117,9 +121,9 @@ def md_tables(series, v8, v9):
     print("| cena | v8 (ms) | v9 (ms) | v9 vs v8 |\n|---|---:|---:|---:|")
     for s in SCENES:
         a, c = v8[(s, "render")], v9[(s, "render")]
-        print(f"| `{s}` | {a:.2f} | {c:.2f} | {100 * (c / a - 1):+.0f}% |")
+        print(f"| `{s}` | {num(a)} | {num(c)} | {100 * (c / a - 1):+.0f}% |")
     for v in (8, 9):
-        print(f"\nFPS com envio ao LCD, LVGL {v}:\n\n| cena | " + " | ".join(f"{m} MHz" for _, m in CLOCKS) + " |")
+        print(f"\nFPS com envio ao LCD, LVGL {v}:\n\n| cena | " + " | ".join(f"{num(m, 'g')} MHz" for _, m in CLOCKS) + " |")
         print("|---|" + "---:|" * len(CLOCKS))
         for s in SCENES:
             print(f"| `{s}` | " + " | ".join(f"{1000 / d[(s, 'lcd')]:.0f}" if (d := series[v].get(sfx)) else "–"
@@ -129,7 +133,7 @@ def md_tables(series, v8, v9):
         print("\n| cena | v9 (ms) | v9 + FreeRTOS | v9 + 2 núcleos |\n|---|---:|---:|---:|")
         for s in SCENES:
             a = mt["v9"][(s, "render")]
-            print(f"| `{s}` | {a:.2f} | " + " | ".join(f"{mt[n][(s, 'render')]:.2f} ({100 * (mt[n][(s, 'render')] / a - 1):+.0f}%)"
+            print(f"| `{s}` | {num(a)} | " + " | ".join(f"{num(mt[n][(s, 'render')])} ({100 * (mt[n][(s, 'render')] / a - 1):+.0f}%)"
                                                for n in ("v9-freertos", "v9-mt")) + " |")
 
 

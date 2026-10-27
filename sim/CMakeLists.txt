@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(lvgl_bench_sim C)
 
-# Reaproveita o LVGL 9 que o ESP-IDF baixa para v9/managed_components (rode um build do v9 antes).
+# Reaproveita o LVGL 9 que o ESP-IDF baixa para v9/managed_components (compile o v9 antes).
 set(LVGL_DIR ${CMAKE_CURRENT_LIST_DIR}/../v9/managed_components/lvgl__lvgl CACHE PATH "Fonte do LVGL 9")
 set(LV_BUILD_CONF_PATH ${CMAKE_CURRENT_LIST_DIR}/lv_conf.h CACHE PATH "" FORCE)
 set(CONFIG_LV_USE_SDL ON)

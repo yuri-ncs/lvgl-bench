@@ -11,7 +11,7 @@ mesma placa, com as mesmas configurações, e o tempo de cada quadro vai para o 
 
 ## Resumo
 
-- **O v9 é bem mais rápido onde o trabalho é misturar pixels:** texto anti-aliased (−54%), imagem
+- **O v9 é bem mais rápido onde o trabalho é misturar pixels:** texto suavizado (−54%), imagem
   girada (−41%), retângulos translúcidos (−32%) e imagem translúcida (−25%).
 - **O v9 é mais lento onde há muitas operações pequenas:** preencher e copiar sem transparência
   (+44% e +64%, mas abaixo de 5 ms), o gráfico da interface `ui` (+36%) e os objetos girados de
@@ -30,7 +30,7 @@ mesma placa, com as mesmas configurações, e o tempo de cada quadro vai para o 
 | | |
 |---|---|
 | Placa | LilyGO T-Display-S3: ESP32-S3 (2 núcleos a 240 MHz), ST7789 320×170 em barramento i80 de 8 bits |
-| SDK | ESP-IDF 5.5.4, LVGL 8.4.0 e 9.6.0 pelo component registry |
+| SDK | ESP-IDF 5.5.4, LVGL 8.4.0 e 9.6.0 pelo registro de componentes |
 | Cor | RGB565, dois buffers parciais de 40 linhas em RAM interna com DMA |
 
 Cada cena redesenha **a tela inteira 60 vezes** (`lv_obj_invalidate` + `lv_refr_now`) e o tempo de
@@ -64,18 +64,18 @@ grava em `results/`.
 
 | cena | o que desenha | v8 (ms) | v9 (ms) | v9 vs v8 |
 |---|---|---:|---:|---:|
-| `fill` | só o fundo da tela | 0.53 | 0.77 | +44% |
-| `gradient` | degradê vertical na tela toda | 1.50 | 1.58 | +5% |
-| `rects` | 24 retângulos arredondados com borda | 10.11 | 11.40 | +13% |
-| `rects_opa` | os mesmos, a 50% de opacidade | 24.45 | 16.67 | −32% |
-| `shadow` | 6 retângulos com sombra larga | 27.07 | 24.22 | −11% |
-| `text` | parágrafo em 14 px + título em 28 px | 34.35 | 15.70 | −54% |
-| `image` | 15 imagens RGB565 de 64×64 | 2.93 | 4.79 | +64% |
-| `image_opa` | as mesmas, a 50% de opacidade | 13.70 | 10.28 | −25% |
-| `rotate` | imagem ampliada 2× girando | 21.44 | 12.72 | −41% |
-| `arc` | 4 arcos concêntricos | 11.30 | 10.45 | −8% |
-| `grad_rot` | 8 círculos com degradê girando | 50.73 | 71.07 | +40% |
-| `ui` | gráfico, medidor, barra, slider, switch e lista rolando | 21.83 | 29.75 | +36% |
+| `fill` | só o fundo da tela | 0,53 | 0,77 | +44% |
+| `gradient` | degradê vertical na tela toda | 1,50 | 1,58 | +5% |
+| `rects` | 24 retângulos arredondados com borda | 10,11 | 11,40 | +13% |
+| `rects_opa` | os mesmos, a 50% de opacidade | 24,45 | 16,67 | −32% |
+| `shadow` | 6 retângulos com sombra larga | 27,07 | 24,22 | −11% |
+| `text` | parágrafo em 14 px + título em 28 px | 34,35 | 15,70 | −54% |
+| `image` | 15 imagens RGB565 de 64×64 | 2,93 | 4,79 | +64% |
+| `image_opa` | as mesmas, a 50% de opacidade | 13,70 | 10,28 | −25% |
+| `rotate` | imagem ampliada 2× girando | 21,44 | 12,72 | −41% |
+| `arc` | 4 arcos concêntricos | 11,30 | 10,45 | −8% |
+| `grad_rot` | 8 círculos com degradê girando | 50,73 | 71,07 | +40% |
+| `ui` | gráfico, medidor, barra, slider, switch e lista rolando | 21,83 | 29,75 | +36% |
 
 ### Por que o v9 perde no `ui`
 
@@ -84,18 +84,18 @@ clang `-O2`; os valores absolutos não valem para o S3, só a proporção entre 
 
 | parte da `ui` | v8 | v9 | v9 vs v8 |
 |---|---:|---:|---:|
-| gráfico (40 pontos) com sombra | 0.138 ms | 0.191 ms | +38% |
-| lista com 15 itens rolando | 0.079 ms | 0.096 ms | +22% |
-| medidor + rótulo | 0.045 ms | 0.043 ms | −3% |
-| barra, slider e switch | 0.023 ms | 0.028 ms | +21% |
-| **tela completa** | **0.338 ms** | **0.409 ms** | **+21%** |
+| gráfico (40 pontos) com sombra | 0,138 ms | 0,191 ms | +38% |
+| lista com 15 itens rolando | 0,079 ms | 0,096 ms | +22% |
+| medidor + rótulo | 0,045 ms | 0,043 ms | −3% |
+| barra, slider e switch | 0,023 ms | 0,028 ms | +21% |
+| **tela completa** | **0,338 ms** | **0,409 ms** | **+21%** |
 
 O gráfico responde por três quartos da diferença e a lista pelo resto. Variando o número de pontos do
 gráfico (10 a 160), cada segmento a mais custa ~2,9 µs no v8 e ~4,1 µs no v9, e cada pontinho mais
 ~0,8 µs no v9 (no v8 é quase de graça).
-No v9 cada primitiva vira uma *draw task* com custo fixo próprio; isso compensa quando a primitiva
-cobre muitos pixels (texto, transparência) e pesa quando são muitas primitivas pequenas (linhas de
-gráfico, pontos, camadas pequenas). O mesmo padrão aparece em `fill`, `rects` e `image`.
+No v9 cada primitiva vira uma tarefa de desenho (*draw task*) com custo fixo próprio; isso compensa
+quando a primitiva cobre muitos pixels (texto, transparência) e pesa quando são muitas primitivas
+pequenas (linhas de gráfico, pontos, camadas pequenas). O mesmo padrão aparece em `fill`, `rects` e `image`.
 
 ### Um núcleo × dois núcleos (v9)
 
@@ -104,18 +104,18 @@ Neste cenário isso piorou tudo. Tempos de renderização em ms:
 
 | cena | v9 | v9 + FreeRTOS | v9 + 2 núcleos |
 |---|---:|---:|---:|
-| `fill` | 0.77 | 0.87 (+14%) | 1.47 (+92%) |
-| `gradient` | 1.58 | 1.68 (+7%) | 2.72 (+73%) |
-| `rects` | 11.40 | 14.74 (+29%) | 20.05 (+76%) |
-| `rects_opa` | 16.67 | 20.01 (+20%) | 25.31 (+52%) |
-| `shadow` | 24.22 | 25.38 (+5%) | 38.19 (+58%) |
-| `text` | 15.70 | 16.25 (+3%) | 23.33 (+49%) |
-| `image` | 4.79 | 5.47 (+14%) | 9.00 (+88%) |
-| `image_opa` | 10.28 | 10.94 (+6%) | 14.48 (+41%) |
-| `rotate` | 12.72 | 12.69 (−0%) | 14.35 (+13%) |
-| `arc` | 10.45 | 11.73 (+12%) | 17.03 (+63%) |
-| `grad_rot` | 71.07 | 71.22 (+0%) | 89.30 (+26%) |
-| `ui` | 29.75 | 36.54 (+23%) | 52.06 (+75%) |
+| `fill` | 0,77 | 0,87 (+14%) | 1,47 (+92%) |
+| `gradient` | 1,58 | 1,68 (+7%) | 2,72 (+73%) |
+| `rects` | 11,40 | 14,74 (+29%) | 20,05 (+76%) |
+| `rects_opa` | 16,67 | 20,01 (+20%) | 25,31 (+52%) |
+| `shadow` | 24,22 | 25,38 (+5%) | 38,19 (+58%) |
+| `text` | 15,70 | 16,25 (+3%) | 23,33 (+49%) |
+| `image` | 4,79 | 5,47 (+14%) | 9,00 (+88%) |
+| `image_opa` | 10,28 | 10,94 (+6%) | 14,48 (+41%) |
+| `rotate` | 12,72 | 12,69 (−0%) | 14,35 (+13%) |
+| `arc` | 10,45 | 11,73 (+12%) | 17,03 (+63%) |
+| `grad_rot` | 71,07 | 71,22 (+0%) | 89,30 (+26%) |
+| `ui` | 29,75 | 36,54 (+23%) | 52,06 (+75%) |
 
 A coluna do meio separa o custo de só ligar o OS (tarefas trocadas por sincronização) do custo de
 dividir entre os núcleos. A hipótese mais provável é que, com buffers de 40 linhas e muitas
@@ -135,7 +135,7 @@ bytes, então o barramento sozinho limita a ~61 FPS a 6,67 MHz e a ~367 FPS a 40
 
 LVGL 8.4:
 
-| cena | 6.67 MHz | 10 MHz | 16 MHz | 20 MHz | 26.67 MHz | 40 MHz |
+| cena | 6,67 MHz | 10 MHz | 16 MHz | 20 MHz | 26,67 MHz | 40 MHz |
 |---|---:|---:|---:|---:|---:|---:|
 | `fill` | 60 | 89 | 140 | 172 | 225 | 325 |
 | `gradient` | 59 | 87 | 136 | 167 | 215 | 305 |
@@ -152,7 +152,7 @@ LVGL 8.4:
 
 LVGL 9.6:
 
-| cena | 6.67 MHz | 10 MHz | 16 MHz | 20 MHz | 26.67 MHz | 40 MHz |
+| cena | 6,67 MHz | 10 MHz | 16 MHz | 20 MHz | 26,67 MHz | 40 MHz |
 |---|---:|---:|---:|---:|---:|---:|
 | `fill` | 60 | 88 | 138 | 170 | 221 | 316 |
 | `gradient` | 59 | 87 | 135 | 165 | 213 | 299 |
@@ -234,19 +234,19 @@ A porta é opcional (sem ela o `bench.py` procura a USB da Espressif). Variantes
 | variante | o que é |
 |---|---|
 | `v8`, `v9` | a base da comparação, LVGL sem OS, um núcleo |
-| `v9-freertos` | v9 com `LV_USE_OS=FREERTOS` e uma *draw unit* |
-| `v9-mt` | v9 com FreeRTOS e duas *draw units* (os dois núcleos) |
+| `v9-freertos` | v9 com `LV_USE_OS=FREERTOS` e uma unidade de desenho |
+| `v9-mt` | v9 com FreeRTOS e duas unidades de desenho (os dois núcleos) |
 | `v8-demo`, `v9-demo` | o `lv_demo_benchmark` oficial de cada versão |
 | `…@MHz` | qualquer uma acima com outro clock no LCD, por exemplo `v9-demo@40` |
 
 Cada variante compila em `v8/build-<variante>` ou `v9/build-<variante>`; trocar só o clock recompila
-apenas o `main`. Se a placa reiniciar no meio da captura (crash), o `bench.py` para e mostra o log.
+apenas o `main`. Se a placa reiniciar no meio da captura (travamento), o `bench.py` para e mostra o log.
 
 ### Simulador no PC
 
 `sim/` roda as mesmas cenas com LVGL 9 e SDL2 numa janela 3× maior, para ver como cada cena deve
 ficar na tela. Com `--demo`, roda o `lv_demo_benchmark`. Ele usa o LVGL que o ESP-IDF baixa para
-`v9/managed_components`, então faça um build do `v9` antes. Sem SDL2 instalado, o CMake do LVGL baixa e
+`v9/managed_components`, então compile o `v9` antes. Sem SDL2 instalado, o CMake do LVGL baixa e
 compila o SDL2 sozinho.
 
 ```sh
@@ -264,7 +264,7 @@ sim\build\lvgl_bench_sim.exe --demo
 ```
 bench.c            firmware: driver do LCD, medição e envio pela USB (compila no v8 e no v9)
 scenes.c, .h       as 12 cenas, com a API comum às duas versões
-bench.py           build, gravação, captura e comparação
+bench.py           compilação, gravação, captura e comparação
 sdkconfig.common   configuração comum (CPU, caches, console USB, fontes, IRAM)
 v8/, v9/           projetos ESP-IDF; cada um puxa a sua versão do LVGL
 sim/               simulador no PC (LVGL 9 + SDL2)
@@ -282,7 +282,7 @@ docs/              gráficos (gerados por charts.py a partir de results/) e a im
 - **O v8 não desenha objetos girados.** Com cor de 16 bits ele precisa de `LV_COLOR_SCREEN_TRANSP=1`;
   sem isso só registra um aviso no log e pula o objeto, e o quadro sai barato demais. Foi um teste
   sem janela no PC, salvando os quadros das duas versões em PNG, que mostrou isso.
-- **Stack overflow com LVGL + FreeRTOS.** A tarefa `main` do ESP-IDF tem 3,5 KB por padrão, o que
+- **Estouro de pilha com LVGL + FreeRTOS.** A tarefa `main` do ESP-IDF tem 3,5 KB por padrão, o que
   estoura na cena `ui`; aqui ela tem 16 KB.
 - **O PCLK pedido não é o PCLK real.** O driver i80 arredonda o divisor para baixo, então um valor
   entre 26,67 e 40 MHz vira 40 MHz. O `bench.py` já escolhe o 80/n mais próximo.
